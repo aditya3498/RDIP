@@ -12,7 +12,7 @@ df = pd.read_excel("HTML_Assignment_Scores_RDIP2.0.xlsx")
 
 #print(df.columns)
 
-g = Github("d81914d796c3d80cfbe26ef421b2bb80b67c2e9a")
+g = Github("6853f416ab003f27ec4efdaf51ee1aceb9cc6fa5")
 
 start_tags, end_tags, attributes = [], [], []
 
@@ -40,7 +40,7 @@ def marks_allocation(path, inputfile):
 
     start_tags.clear(), end_tags.clear(), attributes.clear()
 
-    score, count, count1, count_list, count_attr = 0, 0, 0, 0, 0
+    score, count, count1, count_list, count_attr, count_r, count_c = 0, 0, 0, 0, 0, 0, 0
 
     parser.feed(htmlmin.minify(inputfile))
 
@@ -270,14 +270,18 @@ def marks_allocation(path, inputfile):
                 score += 1
                 #print("IMG10")
 
-            if attr[0] == 'type' and attr[1] == 'radio':
+            if attr[0] == 'type' and attr[1] == 'radio' and count_r <= 3:
 
                 score += 1
+
+                count_r += 1
                 #print("IMG13")
 
-            if attr[0] == 'type' and attr[1] == 'checkbox':
+            if attr[0] == 'type' and attr[1] == 'checkbox' and count_c <= 4:
 
                 score += 0.5
+
+                count_c += 1
                # print("IMG15")
 
             if attr[0] == 'type' and attr[1] == 'reset':
@@ -293,11 +297,11 @@ def marks_allocation(path, inputfile):
 
 def final_scores():
 
-    final_scores_dict, handle_studentid = {}, {}
+    final_scores_dict = {}
 
     flag = False
 
-    final_scores_dict["Scores"] = {}
+    unitid, submissionid, studentid, finalscore, comment = [], [], [], [], []
 
     handle = []
 
@@ -307,17 +311,17 @@ def final_scores():
 
         df['tasksubmission'] = df['tasksubmission'].replace(commiturl, commiturl.split('https://github.com/')[1].split('/')[0])
 
-    files = ['details.html', 'registration.html', 'homepage.html']
+    files = ['Details.html', 'Registration.html', 'Homepage.html']
 
     for handles in handle:
 
-        final_scores_dict['UnitId'] = 1
+        studentid.append(df.loc[df['tasksubmission'] == handles]['studentId'].values[0])
 
-        final_scores_dict['studentId'] = df.loc[df['tasksubmission'] == handles]['submissionId'].values[0]
+        submissionid.append(df.loc[df['tasksubmission'] == handles]['submissionId'].values[0])
 
-        final_scores_dict['submissionId'] = df.loc[df['tasksubmission'] == handles]['studentId'].values[0]
+        unitid.append(1)
 
-        final_score, flag = 0, False
+        final_score, flag, exception = 0, False, False
 
         try:
 
@@ -325,82 +329,67 @@ def final_scores():
 
         except github.GithubException as e:
 
-            final_scores_dict["Comments"] = "Wrong Github Handle Provided"
+            comment.append("Wrong Github Handle Provided")
 
-            final_scores_dict['Scores']['details.html'] = 0
+            finalscore.append(0)
 
-            final_scores_dict['Scores']['homepage.html'] = 0
-
-            final_scores_dict['Scores']['registration.html'] = 0
-
-            final_scores_dict['FinalScore'] = 0
+            continue
 
         for repo in x.get_repos():
 
-            if repo.name == 'rdip':
+            if repo.name.lower() == 'rdip':
                 
                 flag = True
 
                 try:
 
-                    f = repo.get_contents("")
+                    repo.get_contents("")
 
                 except github.GithubException as e:
 
-                    final_scores_dict['Comments'] = "Repository Empty"
+                    exception = True
 
-                    final_scores_dict['Scores']['details.html'] = 0
+                    #comment.append("Empty Repository")
 
-                    final_scores_dict['Scores']['homepage.html'] = 0
-
-                    final_scores_dict['Scores']['registration.html'] = 0
-
-                    final_scores_dict['FinalScore'] = 0
+                    #finalscore.append(0)
 
                     continue
-                #print(f)
 
-                for i in f:
+                for i in repo.get_contents(""):
 
                     if i.path in files:
 
                         score = marks_allocation(i.path, i.decoded_content.decode("utf-8"))
 
-                        print(score)
-
-                        final_scores_dict['Scores'][i.path] = score
-
                         final_score += score
 
                 break
 
-        if final_score == 0 and flag == True:
-            #print(repo.name + handles)
+        if final_score == 0 and flag == True and exception == False:
 
-            final_scores_dict['Comments'] = "Wrong Files Submitted"
+            comment.append("Wrong Files Submitted")
 
-            final_scores_dict['Scores']['details.html'] = 0
+        elif final_score == 0 and flag == False and exception == False:
 
-            final_scores_dict['Scores']['homepage.html'] = 0
+            comment.append("rdip repository not found")
 
-            final_scores_dict['Scores']['registration.html'] = 0
+        elif final_score == 0 and flag == True and exception == True:
 
-        elif final_score == 0 and flag == False:
-
-            final_scores_dict["Comments"] = "rdip repository not found"
-
-            final_scores_dict['Scores']['details.html'] = 0
-
-            final_scores_dict['Scores']['homepage.html'] = 0
-
-            final_scores_dict['Scores']['registration.html'] = 0
+            comment.append("Empty Repository")
 
         else:
 
-            final_scores_dict['Comments'] = "VALID"
+            comment.append("Valid")
 
-        final_scores_dict['FinalScore'] = final_score
+        finalscore.append(final_score)
 
-        print(final_scores_dict)
-
+    final_scores_dict['UnitId'] = unitid
+    final_scores_dict['SubmissionId'] = submissionid
+    final_scores_dict['Studentid'] = studentid
+    final_scores_dict['Final_Score'] = finalscore
+    final_scores_dict['Comments'] = comment
+    #print(final_scores_dict)
+    fd = pd.DataFrame.from_dict(final_scores_dict)
+    fd.to_excel("output.xlsx")
+    #print(fd)
 final_scores()
